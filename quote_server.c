@@ -48,16 +48,24 @@ void makeFileList(char* config)
 	FILE *fid;
 	int index = 0;
 	size_t size = BUFFER_SIZE;
-	char *line;
+	char line[256], *fileName, *save;
 	if((fid = fopen(config, "r")) == NULL)
 	{
 		perror("open: ");
 		exit(0);
 	}
-	while(getline(&line, &size, fid) != -1)
+	printf("Opened: %s\n", config);
+	inputFiles = malloc(sizeof(FILE*) * QUOTE_FILE_TOTAL);
+	printf("done mallocing\n");
+	while(fgets(line, 256, fid) != NULL)
 	{
-		printf("%s", line);
+		strcpy(quoteFiles[index],strtok(line, " :\n"));
+		fileName = strtok(NULL, " :\n");
+		if((inputFiles[index] = fopen(fileName, "r")) == NULL) continue;
+		index++;
 	}
+	fileCount = index;
+	fclose(fid);
 }
 // client thread
 void * clientThread(void * input)
@@ -70,8 +78,6 @@ void * clientThread(void * input)
 int main(int argc, char *argv[])
 {
 	printf("Start\n");
-	inputFiles = malloc(sizeof(FILE*) * QUOTE_FILE_TOTAL);
-	printf("malloc done\n");
 	if(argc != 2)
 	{
 		printf("Usage: quote_server config\n");
