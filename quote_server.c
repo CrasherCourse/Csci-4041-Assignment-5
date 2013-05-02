@@ -67,6 +67,15 @@ void makeFileList(char* config)
 	fileCount = index;
 	fclose(fid);
 }
+// print list
+void printList(void)
+{
+	int i;
+	for(i = 0; i < fileCount; i++)
+	{
+		printf("%s\n", quoteFiles[i]);
+	}
+}
 // client thread
 void * clientThread(void * input)
 {
@@ -87,4 +96,5 @@ int main(int argc, char *argv[])
 	printf("made list\n");
 	getQuote("Einstein");
 	getQuote("derpman");
+	printList();
 }
