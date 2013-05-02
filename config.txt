@@ -1,0 +1,3 @@
+Einstein: einstein.txt
+Twain: twain.txt
+Computers: computers.txt

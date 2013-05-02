@@ -1,0 +1,72 @@
+/**********************************************************************/
+
+/* Requisite includes */
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#define SERVER_PORT 6789 /* CHANGE THIS TO THE PORT OF YOUR SERVER */
+#define BUFFER_SIZE 1024
+#define QUOTE_NAME_SIZE 256
+#define QUOTE_FILE_TOTAL 20
+
+char*quoteFiles[QUOTE_FILE_TOTAL];
+int quoteID[QUOTE_FILE_TOTAL];
+int fileCount = 0;
+/*********************************************************************
+ * get Quote
+ **********************************************************************/
+void getQuote(char* fileName)
+{
+	int i;
+	for(i = 0; i < fileCount; i++)	//determine the file id
+	{
+		if(strcmp(fileName, quoteFiles[i]) == 0)
+		{
+			break;
+		}
+	}
+	if(i == fileCount)
+	{
+
+		printf("We don't have quotes for %s\n", fileName);
+		return;
+	}
+	printf("We have his quotes\n");
+}
+// make file list
+void makeFileList(char* config)
+{
+	int fid;
+	int index = 0;
+	if((fid = open(config, O_RDONLY)) == -1)
+	{
+		perror("open: ");
+		exit(0);
+	}
+}
+// client thread
+void * clientThread(void * input)
+{
+}
+/**********************************************************************
+ * main
+ **********************************************************************/
+
+int main(int argc, char *argv[])
+{
+	if(argc != 2)
+	{
+		printf("Usage: quote_server config\n");
+		exit(0);
+	}
+	makeFileList(argv[1]);
+	getQuote("Einstein");
+	getQuote("derpman");
+}
