@@ -16,10 +16,10 @@
 #define SERVER_PORT 6789 /* CHANGE THIS TO THE PORT OF YOUR SERVER */
 #define BUFFER_SIZE 1024
 #define QUOTE_NAME_SIZE 256
-#define QUOTE_FILE_TOTAL 20
+#define QUOTE_FILE_TOTAL 10
 
 char quoteFiles[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE];
-FILE ** inputFiles;
+FILE ** inputFiles, *logfile;
 int fileCount = 0;
 /*********************************************************************
  * get Quote
@@ -27,6 +27,7 @@ int fileCount = 0;
 void getQuote(char* fileName)
 {
 	int i;
+	char quote[BUFFER_SIZE];
 	for(i = 0; i < fileCount; i++)	//determine the file id
 	{
 		if(strcmp(fileName, quoteFiles[i]) == 0)
@@ -36,11 +37,11 @@ void getQuote(char* fileName)
 	}
 	if(i == fileCount)
 	{
-
 		printf("We don't have quotes for %s\n", fileName);
 		return;
 	}
-	printf("We have his quotes\n");
+	fgets(quote, BUFFER_SIZE, inputFiles[i]);
+	printf("%s", quote);
 }
 // make file list
 void makeFileList(char* config)
@@ -50,6 +51,11 @@ void makeFileList(char* config)
 	size_t size = BUFFER_SIZE;
 	char line[256], *fileName, *save;
 	if((fid = fopen(config, "r")) == NULL)
+	{
+		perror("open: ");
+		exit(0);
+	}
+	if((logfile = fopen("logfile", "w"))==NULL)
 	{
 		perror("open: ");
 		exit(0);
@@ -79,6 +85,13 @@ void printList(void)
 // client thread
 void * clientThread(void * input)
 {
+	int done = 0;
+	char request[BUFFER_SIZE];
+	
+	while(!done)
+	{
+		printf(request);
+	}
 }
 /**********************************************************************
  * main
@@ -95,6 +108,8 @@ int main(int argc, char *argv[])
 	makeFileList(argv[1]);
 	printf("made list\n");
 	getQuote("Einstein");
-	getQuote("derpman");
+	getQuote("Einstein");
+	getQuote("Einstein");
 	printList();
+	
 }
