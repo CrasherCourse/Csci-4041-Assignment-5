@@ -76,21 +76,24 @@ void makeFileList(char* config)
 	fclose(fid);
 }
 // print list
-void printList(void)
+void printList(char retval[BUFFER_SIZE])
 {
 	int i;
+	char *temp;
+	strcpy(retval, "");
 	for(i = 0; i < fileCount; i++)
 	{
-		printf("%s\n", quoteFiles[i]);
+		sprintf(temp, "%s\n", quoteFiles[i]);
+		strcat(retval, temp);
 	}
 }
 // client thread
-void * clientThread(int * input)
+void clientThread(int * input)
 {
 	int done = 0;
 	int clientSocket = *input;
 	printf("Copied the client socket\n");
-	char request[BUFFER_SIZE],response[BUFFER_SIZE];
+	char request[BUFFER_SIZE],response[BUFFER_SIZE], temp[BUFFER_SIZE];
 	strcpy(response, "this is a test\n");
 	while(!done)
 	{
@@ -101,7 +104,17 @@ void * clientThread(int * input)
 			close(clientSocket);
 			exit(1);
 		}
-		printf("%s\n", request);
+		printf("%s", request);
+		if(strcmp(request, "BYE\n") == 0)	//exit
+		{
+			printf("Exiting thread\n");
+			return;
+		}
+		if(strcmp(request, "GET: LIST\n") == 0) printList(response);
+		else
+		{
+			printf("Get a quote\n");
+		}
 		// Send back a response
 		if (send(clientSocket, response, sizeof(response),0) < 0){
 			printf("Error writing on stream socket");
@@ -175,7 +188,7 @@ void *get_in_addr(struct sockaddr *sa)
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
-int main(void)
+int main(int argc, char** argv)
 {
     int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
     struct addrinfo hints, *servinfo, *p;
@@ -184,6 +197,13 @@ int main(void)
     int yes=1;
     char s[INET6_ADDRSTRLEN];
     int rv;
+
+	if(argc != 2)
+	{
+		printf("Usage: quote_server config\n");
+		exit(0);
+	}
+	makeFileList(argv[1]);
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
