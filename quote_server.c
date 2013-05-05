@@ -17,10 +17,12 @@
 #define BUFFER_SIZE 1024
 #define QUOTE_NAME_SIZE 256
 #define QUOTE_FILE_TOTAL 10
+#define BACKLOG 10     // how many pending connections queue will hold
 
 char quoteFiles[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE];
 FILE ** inputFiles, *logfile;
 int fileCount = 0;
+
 /*********************************************************************
  * get Quote
  **********************************************************************/
@@ -83,14 +85,30 @@ void printList(void)
 	}
 }
 // client thread
-void * clientThread(void * input)
+void * clientThread(int * input)
 {
 	int done = 0;
-	char request[BUFFER_SIZE];
-	
+	int clientSocket = *input;
+	printf("Copied the client socket\n");
+	char request[BUFFER_SIZE],response[BUFFER_SIZE];
+	strcpy(response, "this is a test\n");
 	while(!done)
 	{
-		printf(request);
+		// get a client's request
+		if (recv(clientSocket, request, BUFFER_SIZE,0) < 0){
+			printf("Error reading from stream socket");
+			perror("Aborting");
+			close(clientSocket);
+			exit(1);
+		}
+		printf("%s\n", request);
+		// Send back a response
+		if (send(clientSocket, response, sizeof(response),0) < 0){
+			printf("Error writing on stream socket");
+			perror("Aborting");
+			close(clientSocket);
+			exit(1);
+		}
 	}
 }
 /**********************************************************************
@@ -99,17 +117,39 @@ void * clientThread(void * input)
 
 int main(int argc, char *argv[])
 {
+	int i, length, serverSocket;
+	struct sockaddr_in servaddr;
+	int * clientSocket;
+
 	printf("Start\n");
 	if(argc != 2)
 	{
 		printf("Usage: quote_server config\n");
 		exit(0);
 	}
-	makeFileList(argv[1]);
-	printf("made list\n");
-	getQuote("Einstein");
-	getQuote("Einstein");
-	getQuote("Einstein");
-	printList();
-	
+
+	serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if(serverSocket < 0)
+	{
+		perror("Socket Creation failed");
+		exit(0);
+	}
+	printf("made server socket\n");
+
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr = INADDR_ANY;
+	servaddr.sin_port = SERVER_PORT;
+	if(bind(serverSocket, (struct sockaddr *)&servaddr, sizeof(servaddr)))
+	{
+		perror("binding stream socket");
+		exit(0);
+	}
+	printf("Bound Socket!\n");
+	listen(serverSocket, BACKLOG);
+	printf("Ready to serve\n");
+	while(1)
+	{
+		break;
+	}
+	return 0;
 }
