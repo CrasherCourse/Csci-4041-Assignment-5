@@ -21,6 +21,7 @@
 #define BACKLOG 10     // how many pending connections queue will hold
 
 char quoteFiles[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE];
+pthread_mutex_t logMutex, clientMutex, fileMutex[QUOTE_FILE_TOTAL];
 FILE ** inputFiles, *logfile;
 int fileCount = 0;
 
@@ -48,10 +49,12 @@ void getQuote(char* fileName, char* retval)
 		sprintf(retval, "We don't have quotes for %s\n", fileName);
 		return;
 	}
+	pthread_mutex_lock(&fileMutex[i]);		// Protect accessed file
 	fgets(quote, BUFFER_SIZE, inputFiles[i]);
 	strcpy(retval, quote);
 	fgets(quote, BUFFER_SIZE, inputFiles[i]);
 	strcat(retval, quote);
+	pthread_mutex_unlock(&fileMutex[i]);	// Safe for another thread to read from file
 }
 // make file list
 void makeFileList(char* config)
@@ -97,6 +100,7 @@ void printList(char *retval)
 void * clientThread(void * input)
 {
 	int clientSocket = *((int *)input);
+	pthread_mutex_unlock(&clientMutex); // safe to allocate new socket
 	char request[BUFFER_SIZE],* response, temp[BUFFER_SIZE];
 	response = malloc(sizeof(char)*BUFFER_SIZE);
 	while(1)
@@ -148,7 +152,7 @@ void *get_in_addr(struct sockaddr *sa)
 
 int main(int argc, char** argv)
 {
-    int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
+    int sockfd, new_fd, i;  // listen on sock_fd, new connection on new_fd
     struct addrinfo hints, *servinfo, *p;
     struct sockaddr_storage their_addr; // connector's address information
     socklen_t sin_size;
@@ -156,14 +160,20 @@ int main(int argc, char** argv)
     int yes=1;
     char s[INET6_ADDRSTRLEN];
     int rv;
-
+	
 	if(argc != 2)
 	{
 		printf("Usage: quote_server config\n");
 		exit(0);
 	}
 	makeFileList(argv[1]);
-
+	pthread_mutex_init(&logMutex, NULL);
+	pthread_mutex_init(&clientMutex, NULL);
+	for(i = 0; i < fileCount; i++)
+	{
+			pthread_mutex_init(&(fileMutex[i]), NULL);
+	}
+	
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
@@ -212,6 +222,7 @@ int main(int argc, char** argv)
 
     while(1) {  // main accept() loop
         sin_size = sizeof their_addr;
+        pthread_mutex_lock(&clientMutex); // protect transfer of client socket id
         new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
         if (new_fd == -1) {
             perror("accept");
