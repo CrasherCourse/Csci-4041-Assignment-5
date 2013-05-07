@@ -41,7 +41,6 @@ void getQuote(char* fileName, char* retval)
 	}
 	if(strcmp((fileName+16), "ANY\n") == 0)
 	{
-		printf("any quote wanted\n");
 		i = (((double)rand())/RAND_MAX * fileCount);		// Generate psuedorandom number
 	}
 	if(i == fileCount)
@@ -71,9 +70,7 @@ void makeFileList(char* config)
 		perror("open: ");
 		exit(0);
 	}
-	printf("Opened: %s\n", config);
 	inputFiles = malloc(sizeof(FILE*) * QUOTE_FILE_TOTAL);
-	printf("done mallocing\n");
 	while(fgets(line, 256, fid) != NULL)
 	{
 		strcpy(quoteFiles[index],strtok(line, " :\n"));
@@ -92,17 +89,14 @@ void printList(char *retval)
 	strcpy(retval, "");
 	for(i = 0; i < fileCount; i++)
 	{
-		printf("Trying to cat %s\n", quoteFiles[i]);
 		strcat(retval, quoteFiles[i]);
 		strcat(retval, "\n");
-		printf("%s", retval);
 	}
 }
-// client thread
+// client handler thread function
 void clientThread(void * input)
 {
 	int clientSocket = *((int *)input);
-	printf("Copied the client socket\n");
 	char request[BUFFER_SIZE],* response, temp[BUFFER_SIZE];
 	response = malloc(sizeof(char)*BUFFER_SIZE);
 	while(1)
@@ -118,7 +112,6 @@ void clientThread(void * input)
 		printf("%s", request);
 		if(strcmp(request, "BYE\n") == 0)	//exit
 		{
-			printf("Exiting thread\n");
 			break;
 		}
 		else if(strcmp(request, "GET: LIST\n") == 0) printList(response);
@@ -135,6 +128,7 @@ void clientThread(void * input)
 		}
 	}
 	free(response);
+	return;
 }
 void sigchld_handler(int s)
 {
@@ -226,8 +220,5 @@ int main(int argc, char** argv)
         }
         clientThread(&new_fd);
     }
-
     return 0;
 }
-
-
