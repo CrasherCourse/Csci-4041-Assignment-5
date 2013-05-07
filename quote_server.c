@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <time.h>
+#include <sys/time.h>
+#include <signal.h>
 
 #define SERVER_PORT "6789" /* CHANGE THIS TO THE PORT OF YOUR SERVER */
 #define BUFFER_SIZE 1024
@@ -24,6 +26,11 @@ char quoteFiles[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE];
 pthread_mutex_t logMutex, clientMutex, fileMutex[QUOTE_FILE_TOTAL];
 FILE ** inputFiles, *logfile;
 int fileCount = 0;
+
+typedef struct clientData{
+	int socketID;
+	char clientIP[BUFFER_SIZE];
+} clientData;
 
 /*********************************************************************
  * Code
@@ -40,21 +47,21 @@ void getQuote(char* fileName, char* retval)
 			break;
 		}
 	}
-	if(strcmp((fileName+16), "ANY\n") == 0)
+	if(strcmp((fileName+16), "ANY\n") == 0)					// Check if client requested for ANY
 	{
 		i = (((double)rand())/RAND_MAX * fileCount);		// Generate psuedorandom number
 	}
-	if(i == fileCount)
+	if(i == fileCount)										// No file matches name
 	{
 		sprintf(retval, "We don't have quotes for %s\n", fileName);
 		return;
 	}
-	pthread_mutex_lock(&fileMutex[i]);		// Protect accessed file
-	fgets(quote, BUFFER_SIZE, inputFiles[i]);
+	pthread_mutex_lock(&fileMutex[i]);			// Protect accessed file
+	fgets(quote, BUFFER_SIZE, inputFiles[i]);	// Get quote
 	strcpy(retval, quote);
-	fgets(quote, BUFFER_SIZE, inputFiles[i]);
-	strcat(retval, quote);
-	pthread_mutex_unlock(&fileMutex[i]);	// Safe for another thread to read from file
+	fgets(quote, BUFFER_SIZE, inputFiles[i]);	// Get name of quote's speaker
+	strcat(retval, quote);						// put at end of retval
+	pthread_mutex_unlock(&fileMutex[i]);		// Safe for another thread to read from file
 }
 // make file list
 void makeFileList(char* config)
@@ -96,13 +103,31 @@ void printList(char *retval)
 		strcat(retval, "\n");
 	}
 }
+// Record to logefile
+record(char * action, char * IP)
+{
+	char  buffer[BUFFER_SIZE];
+	char* datetime;
+
+	int retval;
+	time_t  clocktime;
+	struct tm  *timeinfo;
+	time (&clocktime);
+	timeinfo = localtime( &clocktime );
+	strftime(buffer, BUFFER_SIZE, "%b-%d-%Y-%H-%M-%S", timeinfo); 
+	
+	fprintf(logfile, "%s: %s: %s\n", action, buffer, IP);
+}
 // client handler thread function
 void * clientThread(void * input)
 {
-	int clientSocket = *((int *)input);
+	int clientSocket = ((clientData *)input)->socketID;
+	char request[BUFFER_SIZE],* response, IP[BUFFER_SIZE];
+	strcpy(IP, ((clientData *)input)->clientIP);
 	pthread_mutex_unlock(&clientMutex); // safe to allocate new socket
-	char request[BUFFER_SIZE],* response, temp[BUFFER_SIZE];
-	response = malloc(sizeof(char)*BUFFER_SIZE);
+	record("Connection Opened", IP);
+
+	response = malloc(sizeof(char)*BUFFER_SIZE);	// allocate size for response
 	while(1)
 	{
 		strcpy(response, "Invalid command");
@@ -114,14 +139,14 @@ void * clientThread(void * input)
 			exit(1);
 		}
 		printf("%s", request);
-		if(strcmp(request, "BYE\n") == 0)	//exit
+		if(strcmp(request, "BYE\n") == 0)	// exit client thread
 		{
 			break;
 		}
-		else if(strcmp(request, "GET: LIST\n") == 0) printList(response);
+		else if(strcmp(request, "GET: LIST\n") == 0) printList(response);	// give client a list of quotes
 		else
 		{
-			getQuote(request, response);
+			getQuote(request, response);	// get a quote
 		}
 		// Send back a response
 		if (send(clientSocket, response, BUFFER_SIZE,0) < 0){
@@ -131,8 +156,9 @@ void * clientThread(void * input)
 			exit(1);
 		}
 	}
+	record("Connection Closed", IP);		// Record closing
 	free(response);
-	pthread_exit(0);
+	pthread_exit(0);		// Client thread is done
 }
 void sigchld_handler(int s)
 {
@@ -145,6 +171,12 @@ void *get_in_addr(struct sockaddr *sa)
         return &(((struct sockaddr_in*)sa)->sin_addr);
     }
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+// Stops server with ctrl-C, makes sure logfile is properly closed
+void closeServer(int sig)
+{
+	fclose(logfile);
+	exit(0);
 }
 /**********************************************************************
  * main
@@ -160,24 +192,27 @@ int main(int argc, char** argv)
     int yes=1;
     char s[INET6_ADDRSTRLEN];
     int rv;
+    clientData cd;
 	
 	if(argc != 2)
 	{
 		printf("Usage: quote_server config\n");
 		exit(0);
 	}
-	makeFileList(argv[1]);
+	makeFileList(argv[1]);				// Opens all of the files in config and the logfile
+	// Set up mutexes used by program
 	pthread_mutex_init(&logMutex, NULL);
 	pthread_mutex_init(&clientMutex, NULL);
 	for(i = 0; i < fileCount; i++)
 	{
 			pthread_mutex_init(&(fileMutex[i]), NULL);
 	}
+	signal(SIGINT, closeServer);		// Set up server closing protcol
 	
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE; // use my IP
+    hints.ai_flags = AI_PASSIVE; 		// use my IP
 
     if ((rv = getaddrinfo(NULL, SERVER_PORT, &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -218,8 +253,6 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    printf("server: waiting for connections...\n");
-
     while(1) {  // main accept() loop
         sin_size = sizeof their_addr;
         pthread_mutex_lock(&clientMutex); // protect transfer of client socket id
@@ -228,7 +261,9 @@ int main(int argc, char** argv)
             perror("accept");
             continue;
         }
-        pthread_create(&tid, NULL, clientThread, ((void *) &new_fd));
+        cd.socketID = new_fd;
+        inet_ntop(AF_INET, (struct sockaddr *)&their_addr, cd.clientIP, sizeof cd.clientIP);
+        pthread_create(&tid, NULL, clientThread, ((void *) &cd));	// create thread for new client
     }
     return 0;
 }
