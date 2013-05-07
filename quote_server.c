@@ -126,9 +126,6 @@ void clientThread(int * input)
 		}
 	}
 }
-/**********************************************************************
- * main
- **********************************************************************/
 void sigchld_handler(int s)
 {
     while(waitpid(-1, NULL, WNOHANG) > 0);
@@ -143,6 +140,10 @@ void *get_in_addr(struct sockaddr *sa)
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
+/**********************************************************************
+ * main
+ **********************************************************************/
+
 int main(int argc, char** argv)
 {
     int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
