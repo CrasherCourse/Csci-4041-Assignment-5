@@ -28,24 +28,29 @@ int fileCount = 0;
 /*********************************************************************
  * get Quote
  **********************************************************************/
-void getQuote(char* fileName)
+void getQuote(char* fileName, char* retval)
 {
 	int i;
-	char quote[BUFFER_SIZE];
+	char quote[BUFFER_SIZE], temp[BUFFER_SIZE];
 	for(i = 0; i < fileCount; i++)	//determine the file id
 	{
-		if(strcmp(fileName, quoteFiles[i]) == 0)
+		if(strncmp(quoteFiles[i], (fileName+16), strlen(quoteFiles[i])) == 0)
 		{
 			break;
 		}
 	}
+	if(strcmp((fileName+16), "ANY\n") == 0)
+	{
+		printf("any quote wanted\n");
+		i = 0;
+	}
 	if(i == fileCount)
 	{
-		printf("We don't have quotes for %s\n", fileName);
+		sprintf(retval, "We don't have quotes for %s\n", fileName);
 		return;
 	}
 	fgets(quote, BUFFER_SIZE, inputFiles[i]);
-	printf("%s", quote);
+	strcpy(retval, quote);
 }
 // make file list
 void makeFileList(char* config)
@@ -78,27 +83,29 @@ void makeFileList(char* config)
 	fclose(fid);
 }
 // print list
-void printList(char retval[BUFFER_SIZE])
+void printList(char *retval)
 {
 	int i;
 	char *temp;
 	strcpy(retval, "");
 	for(i = 0; i < fileCount; i++)
 	{
-		sprintf(temp, "%s\n", quoteFiles[i]);
-		strcat(retval, temp);
+		printf("Trying to cat %s\n", quoteFiles[i]);
+		strcat(retval, quoteFiles[i]);
+		strcat(retval, "\n");
+		printf("%s", retval);
 	}
 }
 // client thread
-void clientThread(int * input)
+void clientThread(void * input)
 {
-	int done = 0;
-	int clientSocket = *input;
+	int clientSocket = *((int *)input);
 	printf("Copied the client socket\n");
-	char request[BUFFER_SIZE],response[BUFFER_SIZE], temp[BUFFER_SIZE];
-	strcpy(response, "this is a test\n");
-	while(!done)
+	char request[BUFFER_SIZE],* response, temp[BUFFER_SIZE];
+	response = malloc(sizeof(char)*BUFFER_SIZE);
+	while(1)
 	{
+		strcpy(response, "Invalid command");
 		// get a client's request
 		if (recv(clientSocket, request, BUFFER_SIZE,0) < 0){
 			printf("Error reading from stream socket");
@@ -110,21 +117,22 @@ void clientThread(int * input)
 		if(strcmp(request, "BYE\n") == 0)	//exit
 		{
 			printf("Exiting thread\n");
-			return;
+			break;
 		}
-		if(strcmp(request, "GET: LIST\n") == 0) printList(response);
+		else if(strcmp(request, "GET: LIST\n") == 0) printList(response);
 		else
 		{
-			printf("Get a quote\n");
+			getQuote(request, response);
 		}
 		// Send back a response
-		if (send(clientSocket, response, sizeof(response),0) < 0){
+		if (send(clientSocket, response, BUFFER_SIZE,0) < 0){
 			printf("Error writing on stream socket");
 			perror("Aborting");
 			close(clientSocket);
 			exit(1);
 		}
 	}
+	free(response);
 }
 void sigchld_handler(int s)
 {
@@ -190,7 +198,6 @@ int main(int argc, char** argv)
             perror("server: bind");
             continue;
         }
-
         break;
     }
 
@@ -215,7 +222,6 @@ int main(int argc, char** argv)
             perror("accept");
             continue;
         }
-
         clientThread(&new_fd);
     }
 
