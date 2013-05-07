@@ -129,53 +129,6 @@ void clientThread(int * input)
 /**********************************************************************
  * main
  **********************************************************************/
-/*
-int main(int argc, char *argv[])
-{
-	int i, length, serverSocket;
-	struct sockaddr_in servaddr;
-	int * clientSocket;
-	struct sockaddr_storage clientaddr; // connector's address information
-    socklen_t sin_size;
-
-	printf("Start\n");
-	if(argc != 2)
-	{
-		printf("Usage: quote_server config\n");
-		exit(0);
-	}
-
-	serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if(serverSocket < 0)
-	{
-		perror("Socket Creation failed");
-		exit(0);
-	}
-	printf("made server socket\n");
-
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_addr.s_addr = INADDR_ANY;
-	servaddr.sin_port = SERVER_PORT;
-	if(bind(serverSocket, (struct sockaddr *)&servaddr, sizeof(servaddr)))
-	{
-		perror("binding stream socket");
-		exit(0);
-	}
-	printf("Bound Socket!\n");
-	if(getsockname(serverSocket, (struct sockaddr *)&servaddr, &length))
-	{
-		perror("geting socket's port number\n");
-		exit(0);
-	}
-	listen(serverSocket, BACKLOG);
-	printf("Ready to serve\n");
-	while(1)
-	{
-
-	}
-	return 0;
-}
-* */
 void sigchld_handler(int s)
 {
     while(waitpid(-1, NULL, WNOHANG) > 0);
