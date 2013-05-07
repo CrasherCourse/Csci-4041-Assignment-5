@@ -51,6 +51,8 @@ void getQuote(char* fileName, char* retval)
 	}
 	fgets(quote, BUFFER_SIZE, inputFiles[i]);
 	strcpy(retval, quote);
+	fgets(quote, BUFFER_SIZE, inputFiles[i]);
+	strcat(retval, quote);
 }
 // make file list
 void makeFileList(char* config)
