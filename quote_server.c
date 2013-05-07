@@ -29,6 +29,7 @@ int fileCount = 0;
 
 typedef struct clientData{
 	int socketID;
+	char clientIP[BUFFER_SIZE];
 } clientData;
 
 /*********************************************************************
@@ -46,21 +47,21 @@ void getQuote(char* fileName, char* retval)
 			break;
 		}
 	}
-	if(strcmp((fileName+16), "ANY\n") == 0)
+	if(strcmp((fileName+16), "ANY\n") == 0)					// Check if client requested for ANY
 	{
 		i = (((double)rand())/RAND_MAX * fileCount);		// Generate psuedorandom number
 	}
-	if(i == fileCount)
+	if(i == fileCount)										// No file matches name
 	{
 		sprintf(retval, "We don't have quotes for %s\n", fileName);
 		return;
 	}
-	pthread_mutex_lock(&fileMutex[i]);		// Protect accessed file
-	fgets(quote, BUFFER_SIZE, inputFiles[i]);
+	pthread_mutex_lock(&fileMutex[i]);			// Protect accessed file
+	fgets(quote, BUFFER_SIZE, inputFiles[i]);	// Get quote
 	strcpy(retval, quote);
-	fgets(quote, BUFFER_SIZE, inputFiles[i]);
-	strcat(retval, quote);
-	pthread_mutex_unlock(&fileMutex[i]);	// Safe for another thread to read from file
+	fgets(quote, BUFFER_SIZE, inputFiles[i]);	// Get name of quote's speaker
+	strcat(retval, quote);						// put at end of retval
+	pthread_mutex_unlock(&fileMutex[i]);		// Safe for another thread to read from file
 }
 // make file list
 void makeFileList(char* config)
@@ -124,7 +125,7 @@ void * clientThread(void * input)
 	pthread_mutex_unlock(&clientMutex); // safe to allocate new socket
 	record("Connection Opened", "IP address");
 	char request[BUFFER_SIZE],* response, temp[BUFFER_SIZE];
-	response = malloc(sizeof(char)*BUFFER_SIZE);
+	response = malloc(sizeof(char)*BUFFER_SIZE);	// allocate size for response
 	while(1)
 	{
 		strcpy(response, "Invalid command");
@@ -136,14 +137,14 @@ void * clientThread(void * input)
 			exit(1);
 		}
 		printf("%s", request);
-		if(strcmp(request, "BYE\n") == 0)	//exit
+		if(strcmp(request, "BYE\n") == 0)	// exit client thread
 		{
 			break;
 		}
-		else if(strcmp(request, "GET: LIST\n") == 0) printList(response);
+		else if(strcmp(request, "GET: LIST\n") == 0) printList(response);	// give client a list of quotes
 		else
 		{
-			getQuote(request, response);
+			getQuote(request, response);	// get a quote
 		}
 		// Send back a response
 		if (send(clientSocket, response, BUFFER_SIZE,0) < 0){
@@ -153,9 +154,9 @@ void * clientThread(void * input)
 			exit(1);
 		}
 	}
-	record("Connection Closed", "IP address");
+	record("Connection Closed", "IP address");		// Record closing
 	free(response);
-	pthread_exit(0);
+	pthread_exit(0);		// Client thread is done
 }
 void sigchld_handler(int s)
 {
@@ -169,7 +170,8 @@ void *get_in_addr(struct sockaddr *sa)
     }
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
-void closeServer(int sig)		// Stops server with ctrl-C
+// Stops server with ctrl-C, makes sure logfile is properly closed
+void closeServer(int sig)
 {
 	fclose(logfile);
 	exit(0);
@@ -188,13 +190,15 @@ int main(int argc, char** argv)
     int yes=1;
     char s[INET6_ADDRSTRLEN];
     int rv;
+    clientData cd;
 	
 	if(argc != 2)
 	{
 		printf("Usage: quote_server config\n");
 		exit(0);
 	}
-	makeFileList(argv[1]);
+	makeFileList(argv[1]);				// Opens all of the files in config and the logfile
+	// Set up mutexes used by program
 	pthread_mutex_init(&logMutex, NULL);
 	pthread_mutex_init(&clientMutex, NULL);
 	for(i = 0; i < fileCount; i++)
@@ -206,7 +210,7 @@ int main(int argc, char** argv)
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE; // use my IP
+    hints.ai_flags = AI_PASSIVE; 		// use my IP
 
     if ((rv = getaddrinfo(NULL, SERVER_PORT, &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -255,7 +259,10 @@ int main(int argc, char** argv)
             perror("accept");
             continue;
         }
-        pthread_create(&tid, NULL, clientThread, ((void *) &new_fd));
+        cd.socketID = new_fd;
+        inet_ntop(AF_INET, (struct sockaddr *)&their_addr, cd.clientIP, sizeof cd.clientIP);
+        printf("%s has connected\n", cd.clientIP);
+        pthread_create(&tid, NULL, clientThread, ((void *) &new_fd));	// create thread for new client
     }
     return 0;
 }
