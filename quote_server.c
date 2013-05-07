@@ -1,5 +1,4 @@
 /**********************************************************************/
-
 /* Requisite includes */
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -26,8 +25,9 @@ FILE ** inputFiles, *logfile;
 int fileCount = 0;
 
 /*********************************************************************
- * get Quote
+ * Code
  **********************************************************************/
+// get a Quote
 void getQuote(char* fileName, char* retval)
 {
 	int i;
@@ -94,7 +94,7 @@ void printList(char *retval)
 	}
 }
 // client handler thread function
-void clientThread(void * input)
+void * clientThread(void * input)
 {
 	int clientSocket = *((int *)input);
 	char request[BUFFER_SIZE],* response, temp[BUFFER_SIZE];
@@ -128,20 +128,18 @@ void clientThread(void * input)
 		}
 	}
 	free(response);
-	return;
+	pthread_exit(0);
 }
 void sigchld_handler(int s)
 {
     while(waitpid(-1, NULL, WNOHANG) > 0);
 }
-
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
     if (sa->sa_family == AF_INET) {
         return &(((struct sockaddr_in*)sa)->sin_addr);
     }
-
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 /**********************************************************************
@@ -154,6 +152,7 @@ int main(int argc, char** argv)
     struct addrinfo hints, *servinfo, *p;
     struct sockaddr_storage their_addr; // connector's address information
     socklen_t sin_size;
+    pthread_t tid;
     int yes=1;
     char s[INET6_ADDRSTRLEN];
     int rv;
@@ -218,7 +217,7 @@ int main(int argc, char** argv)
             perror("accept");
             continue;
         }
-        clientThread(&new_fd);
+        pthread_create(&tid, NULL, clientThread, ((void *) &new_fd));
     }
     return 0;
 }
