@@ -121,10 +121,12 @@ record(char * action, char * IP)
 // client handler thread function
 void * clientThread(void * input)
 {
-	int clientSocket = *((int *)input);
+	int clientSocket = ((clientData *)input)->socketID;
+	char request[BUFFER_SIZE],* response, IP[BUFFER_SIZE];
+	strcpy(IP, ((clientData *)input)->clientIP);
 	pthread_mutex_unlock(&clientMutex); // safe to allocate new socket
-	record("Connection Opened", "IP address");
-	char request[BUFFER_SIZE],* response, temp[BUFFER_SIZE];
+	record("Connection Opened", IP);
+
 	response = malloc(sizeof(char)*BUFFER_SIZE);	// allocate size for response
 	while(1)
 	{
@@ -154,7 +156,7 @@ void * clientThread(void * input)
 			exit(1);
 		}
 	}
-	record("Connection Closed", "IP address");		// Record closing
+	record("Connection Closed", IP);		// Record closing
 	free(response);
 	pthread_exit(0);		// Client thread is done
 }
@@ -261,8 +263,7 @@ int main(int argc, char** argv)
         }
         cd.socketID = new_fd;
         inet_ntop(AF_INET, (struct sockaddr *)&their_addr, cd.clientIP, sizeof cd.clientIP);
-        printf("%s has connected\n", cd.clientIP);
-        pthread_create(&tid, NULL, clientThread, ((void *) &new_fd));	// create thread for new client
+        pthread_create(&tid, NULL, clientThread, ((void *) &cd));	// create thread for new client
     }
     return 0;
 }
