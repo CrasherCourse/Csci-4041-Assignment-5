@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <time.h>
+#include <sys/time.h>
+#include <signal.h>
 
 #define SERVER_PORT "6789" /* CHANGE THIS TO THE PORT OF YOUR SERVER */
 #define BUFFER_SIZE 1024
@@ -24,6 +26,10 @@ char quoteFiles[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE];
 pthread_mutex_t logMutex, clientMutex, fileMutex[QUOTE_FILE_TOTAL];
 FILE ** inputFiles, *logfile;
 int fileCount = 0;
+
+typedef struct clientData{
+	int socketID;
+} clientData;
 
 /*********************************************************************
  * Code
@@ -96,11 +102,27 @@ void printList(char *retval)
 		strcat(retval, "\n");
 	}
 }
+// Record to logefile
+record(char * action, char * IP)
+{
+	char  buffer[BUFFER_SIZE];
+	char* datetime;
+
+	int retval;
+	time_t  clocktime;
+	struct tm  *timeinfo;
+	time (&clocktime);
+	timeinfo = localtime( &clocktime );
+	strftime(buffer, BUFFER_SIZE, "%b-%d-%Y-%H-%M-%S", timeinfo); 
+	
+	fprintf(logfile, "%s: %s: %s\n", action, buffer, IP);
+}
 // client handler thread function
 void * clientThread(void * input)
 {
 	int clientSocket = *((int *)input);
 	pthread_mutex_unlock(&clientMutex); // safe to allocate new socket
+	record("Connection Opened", "IP address");
 	char request[BUFFER_SIZE],* response, temp[BUFFER_SIZE];
 	response = malloc(sizeof(char)*BUFFER_SIZE);
 	while(1)
@@ -131,6 +153,7 @@ void * clientThread(void * input)
 			exit(1);
 		}
 	}
+	record("Connection Closed", "IP address");
 	free(response);
 	pthread_exit(0);
 }
@@ -145,6 +168,11 @@ void *get_in_addr(struct sockaddr *sa)
         return &(((struct sockaddr_in*)sa)->sin_addr);
     }
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+void closeServer(int sig)		// Stops server with ctrl-C
+{
+	fclose(logfile);
+	exit(0);
 }
 /**********************************************************************
  * main
@@ -173,6 +201,7 @@ int main(int argc, char** argv)
 	{
 			pthread_mutex_init(&(fileMutex[i]), NULL);
 	}
+	signal(SIGINT, closeServer);		// Set up server closing protcol
 	
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -217,8 +246,6 @@ int main(int argc, char** argv)
         perror("listen");
         exit(1);
     }
-
-    printf("server: waiting for connections...\n");
 
     while(1) {  // main accept() loop
         sin_size = sizeof their_addr;
