@@ -42,7 +42,7 @@ void getQuote(char* fileName, char* retval)
 	if(strcmp((fileName+16), "ANY\n") == 0)
 	{
 		printf("any quote wanted\n");
-		i = 0;
+		i = (((double)rand())/RAND_MAX * fileCount);		// Generate psuedorandom number
 	}
 	if(i == fileCount)
 	{
