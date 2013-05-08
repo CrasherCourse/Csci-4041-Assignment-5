@@ -22,6 +22,8 @@
 #define QUOTE_FILE_TOTAL 10
 #define BACKLOG 10     // how many pending connections queue will hold
 
+char config[BUFFER_SIZE], quoteNames[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE];
+int madeListOnce = 0;
 pthread_mutex_t logMutex, clientMutex;
 FILE *logfile;
 
@@ -36,13 +38,15 @@ typedef struct clientData{
  **********************************************************************/
 // get a Quote
 // Trys to find matching file, gets random one for "ANY"
-void getQuote(char * selector, char quoteName[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE], FILE** quoteFiles, int quoteCount, char* retval)
+void getQuote(char * selector, FILE** quoteFiles, int quoteCount, char* retval)
 {
 	int i;
 	char quote[BUFFER_SIZE], temp[BUFFER_SIZE];
+	printf("%s\n", (selector+16));
 	for(i = 0; i < quoteCount; i++)				//determine the file id
 	{
-		if(strncmp(quoteName[i], (selector+16), strlen(quoteName[i])) == 0)
+		printf("%s\n", quoteNames[i]);
+		if(strncmp(quoteNames[i], (selector+16), strlen(quoteNames[i])) == 0)
 		{
 			break;
 		}
@@ -67,7 +71,7 @@ void getQuote(char * selector, char quoteName[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE]
 
 // Make file list
 // Also gets a list of Names and the quote file total
-void makeFileList(char* config, char quoteName[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE], FILE ** quoteFiles, int quoteCount)
+void makeFileList(FILE ** quoteFiles, int *quoteCount)
 {
 	FILE *fid;
 	int index = 0;
@@ -80,28 +84,30 @@ void makeFileList(char* config, char quoteName[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE
 		exit(0);							// if config is unopenable, it will never work
 	}
 
-	quoteFiles = malloc(sizeof(FILE*) * QUOTE_FILE_TOTAL);	// Malloc space for file pointers
 	while(fgets(line, 256, fid) != NULL)					// get names of each file from config
 	{
-		strcpy(quoteName[index],strtok(line, " :\n"));		// save the file name 
+		printf("%s\n", line);
+		if(!madeListOnce) strcpy(quoteNames[index], strtok(line, " :\n"));		// save the file name, once
+		else strtok(line, " :\n");	// just discard first part
 		temp = strtok(NULL, " :\n");
 		if((quoteFiles[index] = fopen(temp, "r")) == NULL) continue;	// open quote file
 		index++;
 	}
-	quoteCount = index;	// save total number of quote files
+	printf("%d\n", index);
+	*quoteCount = index;	// save total number of quote files
 	fclose(fid);		// done with the config file
 }
 
 // printList
 // print list of quotes to retval parameter
-void printList(char *retval, char quoteFiles[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE], int quoteCount)
+void printList(char *retval, int quoteCount)
 {
 	int i;
 	char *temp;
 	strcpy(retval, "");
 	for(i = 0; i < quoteCount; i++)
 	{
-		strcat(retval, quoteFiles[i]);
+		strcat(retval, quoteNames[i]);
 		strcat(retval, "\n");
 	}
 }
@@ -133,11 +139,11 @@ void * clientThread(void * input)
 	strcpy(IP, ((clientData *)input)->clientIP);			// copy client IP
 	pthread_mutex_unlock(&clientMutex); 					// safe to allocate new socket
 	record("Connection Opened", IP);						// write to logfile
-	char quoteNames[QUOTE_FILE_TOTAL][QUOTE_NAME_SIZE];
-	int quoteCount;
+	int quoteCount, i;											// Total number of files
 	FILE ** quoteFiles = malloc(QUOTE_FILE_TOTAL * (sizeof(FILE*)));	// list of quote file pointers
 	response = malloc(sizeof(char)*BUFFER_SIZE);	// allocate size for response
 	
+	makeFileList(quoteFiles, &quoteCount);
 	while(1)
 	{
 		// get a client's request
@@ -147,14 +153,14 @@ void * clientThread(void * input)
 			close(clientSocket);
 			exit(1);
 		}
-		if(strcmp(request, "BYE\n") == 0)			// exit client thread
+		if(strcmp(request, "BYE\n") == 0)										// exit client thread
 		{
 			break;
 		}
-		else if(strcmp(request, "GET: LIST\n") == 0) printList(response);	// give client a list of quotes
+		else if(strcmp(request, "GET: LIST\n") == 0) printList(response, quoteCount);	// give client a list of quotes
 		else
 		{
-			getQuote(request, response);			// get a quote
+			getQuote(request, quoteFiles, quoteCount, response);	// get a quote
 		}
 		// Send back a response
 		if (send(clientSocket, response, BUFFER_SIZE,0) < 0){
@@ -210,6 +216,8 @@ int main(int argc, char** argv)
 		printf("Usage: quote_server config\n");
 		exit(0);
 	}
+	strcpy(config, argv[1]);	// copy name of config file
+	
 	// Set up mutexes used by program
 	pthread_mutex_init(&logMutex, NULL);
 	pthread_mutex_init(&clientMutex, NULL);
@@ -249,20 +257,17 @@ int main(int argc, char** argv)
         fprintf(stderr, "server: failed to bind\n");
         return 2;
     }
-
     freeaddrinfo(servinfo); // all done with this structure
-
     if (listen(sockfd, BACKLOG) == -1) {
         perror("listen");
         exit(1);
     }
-
 	if((logfile = fopen("logfile", "w"))==NULL)	// open logfile for book keeping
 	{
 		perror("open: ");
 		exit(0);
 	}
-
+	
     while(1) {  											// main accept() loop
         sin_size = sizeof their_addr;
         pthread_mutex_lock(&clientMutex); 					// protect transfer of client socket id
