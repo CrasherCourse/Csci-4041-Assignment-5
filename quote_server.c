@@ -86,14 +86,12 @@ void makeFileList(FILE ** quoteFiles, int *quoteCount)
 
 	while(fgets(line, 256, fid) != NULL)					// get names of each file from config
 	{
-		printf("%s\n", line);
 		if(!madeListOnce) strcpy(quoteNames[index], strtok(line, " :\n"));		// save the file name, once
 		else strtok(line, " :\n");	// just discard first part
 		temp = strtok(NULL, " :\n");
 		if((quoteFiles[index] = fopen(temp, "r")) == NULL) continue;	// open quote file
 		index++;
 	}
-	printf("%d\n", index);
 	*quoteCount = index;	// save total number of quote files
 	fclose(fid);		// done with the config file
 }
